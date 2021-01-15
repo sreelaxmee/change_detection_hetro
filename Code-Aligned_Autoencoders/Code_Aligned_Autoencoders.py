@@ -311,5 +311,6 @@ def test(DATASET="Texas", CONFIG=None):
 
 
 if __name__ == "__main__":
-    test("Texas")
+    test("China")
     test("California")
+    test("Texas")

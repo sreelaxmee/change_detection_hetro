@@ -1,22 +1,19 @@
 import os
-
 # Set loglevel to suppress tensorflow GPU messages
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
-
 import re
 from itertools import count
-
 import numpy as np
 import tensorflow as tf
 from scipy.io import loadmat, savemat
 from change_priors import eval_prior, remove_borders, image_in_patches
-
 
 def load_prior(name, expected_hw=None):
     """ Load prior from disk, validate dimensions and force shape to (h, w, 1) """
     mat = loadmat("data/" + name + "/change-prior.mat")
     varname = (
         re.sub(r"\W+", "", "aff" + str(expected_hw))
+
         if expected_hw is not None
         else "aff"
     )
@@ -40,87 +37,6 @@ def evaluate_prior(name, x, y, **kwargs):
     savemat(prior_path, mat)
     return alpha
 
-
-def _denmark(reduce=False):
-    """ Load Denmark dataset from .mat """
-    mat = loadmat("data/Denmark/EMISAR_Foulum_PolSAR_logIntensity_CLband.mat")
-
-    t1 = np.array(mat["imgCx"], dtype=np.single)
-    t2 = np.array(mat["imgLy"], dtype=np.single)
-    t1, t2 = _clip(t1), _clip(t2)
-    change_mask = tf.convert_to_tensor(mat["GT"], dtype=tf.bool)
-    assert t1.shape[:2] == t2.shape[:2] == change_mask.shape[:2]
-    if change_mask.ndim == 2:
-        change_mask = change_mask[..., np.newaxis]
-    return t1, t2, change_mask
-
-
-def _uk(reduce=True):
-    """ Load UK dataset from .mat """
-    mat = loadmat("data/UK/UK.mat")
-
-    t1 = np.array(mat["t1"], dtype=np.single)
-    t2 = np.array(mat["t2"], dtype=np.single)
-    t1, t2 = _clip(t1), _clip(t2[..., np.newaxis])
-    change_mask = tf.convert_to_tensor(mat["ROI"], dtype=tf.bool)
-    assert t1.shape[:2] == t2.shape[:2] == change_mask.shape[:2]
-    if change_mask.ndim == 2:
-        change_mask = change_mask[..., np.newaxis]
-    if reduce:
-        print("Reducing")
-        reduction_ratios = (5, 5)
-        new_dims = list(map(lambda a, b: a // b, change_mask.shape, reduction_ratios))
-        t1 = tf.cast(tf.image.resize(t1, new_dims, antialias=True), dtype=tf.float32)
-        t2 = tf.cast(tf.image.resize(t2, new_dims, antialias=True), dtype=tf.float32)
-        change_mask = tf.cast(
-            tf.image.resize(tf.cast(change_mask, tf.uint8), new_dims, antialias=True),
-            tf.bool,
-        )
-
-    return t1, t2, change_mask
-
-
-def _italy(reduce=False):
-    """ Load Italy dataset from .mat """
-    mat = loadmat("data/Italy/Italy.mat")
-
-    t1 = np.array(mat["t1"], dtype=np.single)
-    t2 = np.array(mat["t2"], dtype=np.single)
-    if t1.shape[-1] == 3:
-        t1 = t1[..., 0]
-    t1, t2 = _clip(t1[..., np.newaxis]), _clip(t2)
-    change_mask = tf.convert_to_tensor(mat["ROI"], dtype=tf.bool)
-    assert t1.shape[:2] == t2.shape[:2] == change_mask.shape[:2]
-    if change_mask.ndim == 2:
-        change_mask = change_mask[..., np.newaxis]
-    return t1, t2, change_mask
-
-
-def _france(reduce=True):
-    """ Load France dataset from .mat """
-    mat = loadmat("data/France/France.mat")
-
-    t1 = np.array(mat["t1"], dtype=np.single)
-    t2 = np.array(mat["t2"], dtype=np.single)
-    t1, t2 = _clip(t1), _clip(t2)
-    change_mask = tf.convert_to_tensor(mat["ROI"], dtype=tf.bool)
-    assert t1.shape[:2] == t2.shape[:2] == change_mask.shape[:2]
-    if change_mask.ndim == 2:
-        change_mask = change_mask[..., np.newaxis]
-    if reduce:
-        print("Reducing")
-        reduction_ratios = (5, 5)
-        new_dims = list(map(lambda a, b: a // b, change_mask.shape, reduction_ratios))
-        t1 = tf.cast(tf.image.resize(t1, new_dims, antialias=True), dtype=tf.float32)
-        t2 = tf.cast(tf.image.resize(t2, new_dims, antialias=True), dtype=tf.float32)
-        change_mask = tf.cast(
-            tf.image.resize(tf.cast(change_mask, tf.uint8), new_dims, antialias=True),
-            tf.bool,
-        )
-
-    return t1, t2, change_mask
-
-
 def _california(reduce=False):
     """ Load California dataset from .mat """
     mat = loadmat("/Users/gopaku67/Documents/ws/TFlow/Heterogeneous_CD/UiT_HCD_California_2017.mat")
@@ -141,6 +57,8 @@ def _california(reduce=False):
             tf.image.resize(tf.cast(change_mask, tf.uint8), new_dims, antialias=True),
             tf.bool,
         )
+    #func. returns the .mat file in the form of tensors
+    # t1 is img captured at time 1
 
     return t1, t2, change_mask
 
@@ -148,7 +66,6 @@ def _california(reduce=False):
 def _texas(clip=True):
     """ Load Texas dataset from .mat """
     mat = loadmat("/Users/gopaku67/Documents/ws/TFlow/Heterogeneous_CD/Cross-sensor-Bastrop-data.mat")
-
     t1 = np.array(mat["t1_L5"], dtype=np.single)
     t2 = np.array(mat["t2_ALI"], dtype=np.single)
     if clip:
@@ -161,6 +78,23 @@ def _texas(clip=True):
 
     return t1, t2, change_mask
 
+def _china(clip=True):
+    """ Load Texas dataset from .mat """
+    mat_t1 = loadmat("/Users/gopaku67/Documents/ws/TFlow/Heterogeneous_CD/dataset zuixin/river_before.mat")
+    mat_t2 = loadmat("/Users/gopaku67/Documents/ws/TFlow/Heterogeneous_CD/dataset zuixin/river_after.mat")
+    mat_roi = loadmat("/Users/gopaku67/Documents/ws/TFlow/Heterogeneous_CD/dataset zuixin/groundtruth.mat")
+
+    t1 = np.array(mat_t1["river_before"], dtype=np.single)
+    t2 = np.array(mat_t2["river_after"], dtype=np.single)
+    if clip:
+        print("clipping")
+        t1, t2 = _clip(t1), _clip(t2)
+    change_mask = tf.convert_to_tensor(mat_roi["lakelabel_v1"], dtype=tf.bool)
+    assert t1.shape[:2] == t2.shape[:2] == change_mask.shape[:2]
+    if change_mask.ndim == 2:
+        change_mask = change_mask[..., np.newaxis]
+
+    return t1, t2, change_mask
 
 def _clip(image):
     """
@@ -233,13 +167,14 @@ def _training_data_generator(x, y, p, patch_size):
 
     return gen, dtypes, shapes
 
-
 DATASETS = {
     "Texas": _texas,
+    "China": _china,
     "California": _california
 }
 prepare_data = {
     "Texas": True,
+    "China": True,
     "California": True
 }
 
